@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Side-Channel Lab</title>
+<style>
+:root{
+  --bg:#f6f6f3;--panel:#ffffff;--ink:#1d1d1f;--muted:#60646b;--line:#dcdcd6;
+  --accent:#2f6fde;--accent-soft:#dbe6fb;--good:#1d8a4a;--bad:#c62f2f;--bar:#a9c0ea;--code:#f0f0eb;
+  --sq:#2f6fde;--mul:#d9631e;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131417;--panel:#1c1e22;--ink:#e8e8ea;--muted:#a0a4ab;--line:#33363c;
+    --accent:#6c9cff;--accent-soft:#25324d;--good:#4cc27e;--bad:#ff6b6b;--bar:#3b5487;--code:#25282d;
+    --sq:#6c9cff;--mul:#ff9a52;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131417;--panel:#1c1e22;--ink:#e8e8ea;--muted:#a0a4ab;--line:#33363c;
+  --accent:#6c9cff;--accent-soft:#25324d;--good:#4cc27e;--bad:#ff6b6b;--bar:#3b5487;--code:#25282d;
+  --sq:#6c9cff;--mul:#ff9a52;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:1.7rem;margin:0 0 4px}
+h2{font-size:1.25rem;margin:0 0 8px}
+h3{font-size:1rem;margin:18px 0 6px}
+p{margin:6px 0 10px}
+.sub{color:var(--muted);margin:0 0 18px}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+nav button{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:999px;cursor:pointer;font:inherit;font-size:.92rem}
+nav button[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+section.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+section.panel[hidden]{display:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 18px;margin:14px 0}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:4px}
+input[type=text],input[type=number],select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.btn{border:1px solid var(--accent);background:var(--accent);color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit;font-size:.92rem}
+.btn.secondary{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.check{display:flex;align-items:center;gap:6px;font-size:.9rem;color:var(--ink)}
+pre{background:var(--code);border-radius:8px;padding:12px;overflow-x:auto;font-size:.85rem;margin:8px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.callout{border-left:4px solid var(--accent);background:var(--accent-soft);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:.94rem}
+.slots{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.slot{width:38px;height:44px;border:2px solid var(--line);border-radius:8px;display:grid;place-items:center;font:600 1.2rem ui-monospace,Menlo,monospace}
+.slot.ok{border-color:var(--good);color:var(--good)}
+.slot.bad{border-color:var(--bad);color:var(--bad)}
+.slot.next{border-color:var(--accent);border-style:dashed}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat .k{font-size:.8rem;color:var(--muted)}
+.stat .v{font-size:1.15rem;font-weight:600;font-variant-numeric:tabular-nums}
+.chart{width:100%;overflow-x:auto}
+svg text{fill:var(--muted);font:11px system-ui,sans-serif}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+.bits{display:flex;gap:3px;flex-wrap:wrap;font:600 .95rem ui-monospace,Menlo,monospace}
+.bits span{width:22px;text-align:center;border-radius:4px;padding:2px 0}
+.bits .ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.bits .bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.rowlabel{font-size:.8rem;color:var(--muted);margin-top:8px}
+footer{color:var(--muted);font-size:.85rem;margin-top:22px}
+.theme{float:right;font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+  <button class="btn secondary theme" id="themeBtn" type="button">Toggle theme</button>
+  <h1>Side-Channel Lab</h1>
+  <p class="sub">An interactive look at how <strong>leaked timing and power</strong> break algorithms that are mathematically sound, and why <strong>algorithmic complexity</strong> explains how much damage the leak does. Everything here is simulated in your browser. Nothing is sent anywhere.</p>
+
+  <nav role="tablist">
+    <button role="tab" aria-selected="true" data-tab="timing">1 · Timing attack</button>
+    <button role="tab" aria-selected="false" data-tab="power">2 · Power trace (RSA)</button>
+    <button role="tab" aria-selected="false" data-tab="complexity">3 · Why complexity matters</button>
+  </nav>
+
+  <!-- ============ PANEL 1: TIMING ATTACK ============ -->
+  <section class="panel" id="timing" role="tabpanel">
+    <h2>Timing attack on a password check</h2>
+    <p>A server checks a password one character at a time and <em>stops at the first mismatch</em>. A wrong guess whose first 3 characters are correct takes a little longer to reject than one that is wrong at the first character. An attacker who can measure that difference recovers the secret <strong>one character at a time</strong>.</p>
+
+    <div class="controls">
+      <div>
+        <label for="secretIn">Secret password (a–z, 1–10 chars)</label>
+        <input type="text" id="secretIn" value="hunter" maxlength="10" autocomplete="off">
+      </div>
+      <div>
+        <label for="modeSel">Comparison used by the server</label>
+        <select id="modeSel">
+          <option value="naive">Early-exit compare (vulnerable)</option>
+          <option value="ct">Constant-time compare (safe)</option>
+        </select>
+      </div>
+      <div>
+        <label for="noiseIn">Measurement noise: <b id="noiseOut"></b></label>
+        <input type="range" id="noiseIn" min="0" max="40" value="8">
+      </div>
+      <div>
+        <label for="samplesIn">Samples averaged per guess: <b id="samplesOut"></b></label>
+        <input type="range" id="samplesIn" min="1" max="200" value="20">
+      </div>
+    </div>
+
+    <pre><code id="codeView"></code></pre>
+
+    <div class="btns">
+      <button class="btn" id="stepBtn" type="button">Attack next character</button>
+      <button class="btn" id="runBtn" type="button">Run full attack</button>
+      <button class="btn secondary" id="resetBtn" type="button">Reset</button>
+      <label class="check"><input type="checkbox" id="showSecret" checked> Show secret (instructor view)</label>
+    </div>
+
+    <div class="rowlabel">Recovered by attacker</div>
+    <div class="slots" id="slots"></div>
+
+    <div class="chart"><svg id="timingChart" width="100%" height="230" viewBox="0 0 900 230" preserveAspectRatio="none" role="img" aria-label="Average response time for each candidate character"></svg></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--bar)"></span>average response time for that candidate</span>
+      <span><span class="sw" style="background:var(--accent)"></span>attacker's pick (slowest)</span>
+      <span><span class="sw" style="border:2px solid var(--good)"></span>true character</span>
+    </div>
+    <p id="timingMsg" class="callout">Press <b>Attack next character</b>. The attacker tries all 26 letters in the next position and keeps the one the server took longest to reject.</p>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Queries sent so far</div><div class="v" id="qCount">0</div></div>
+      <div class="stat"><div class="k">Timing attack worst case (26 × n × samples)</div><div class="v" id="qTiming">–</div></div>
+      <div class="stat"><div class="k">Brute force worst case (26ⁿ)</div><div class="v" id="qBrute">–</div></div>
+    </div>
+
+    <h3>Things to try</h3>
+    <ul>
+      <li>Set noise to 40 with 1 sample. The attacker starts guessing wrong. Raise the sample count and watch averaging cancel the noise. Real attackers do the same thing.</li>
+      <li>Switch to <b>constant-time compare</b>. Every bar is the same height apart from noise, so the attacker learns nothing.</li>
+      <li>Make the secret longer. Brute force grows <em>exponentially</em> and the timing attack only <em>linearly</em>.</li>
+    </ul>
+  </section>
+
+  <!-- ============ PANEL 2: POWER TRACE ============ -->
+  <section class="panel" id="power" role="tabpanel" hidden>
+    <h2>Reading a secret exponent from a power trace</h2>
+    <p>RSA decryption computes <code>c<sup>d</sup> mod N</code> with <strong>square-and-multiply</strong>. Exponentiation takes O(log d) operations this way instead of O(d), which is what makes RSA practical. But the algorithm only multiplies when a key bit is <b>1</b>. A multiply draws a different amount of power than a square, so an oscilloscope on the chip shows the private key bit by bit.</p>
+
+    <div class="controls">
+      <div>
+        <label for="expIn">Secret exponent d (1 – 1,048,575)</label>
+        <input type="number" id="expIn" value="45813" min="1" max="1048575">
+      </div>
+      <div>
+        <label for="algSel">Exponentiation algorithm</label>
+        <select id="algSel">
+          <option value="sm">Square-and-multiply (leaky)</option>
+          <option value="sma">Square-and-multiply-always (dummy multiplies)</option>
+        </select>
+      </div>
+      <div>
+        <label for="pnoiseIn">Probe noise: <b id="pnoiseOut"></b></label>
+        <input type="range" id="pnoiseIn" min="0" max="100" value="10">
+      </div>
+    </div>
+    <div class="btns">
+      <button class="btn" id="randKeyBtn" type="button">Random 16-bit key</button>
+      <button class="btn secondary" id="retraceBtn" type="button">Re-measure trace</button>
+      <label class="check"><input type="checkbox" id="showDummy"> Highlight dummy multiplies (instructor view)</label>
+    </div>
+
+    <pre><code id="algView"></code></pre>
+
+    <div class="chart"><svg id="traceSvg" width="100%" height="170" viewBox="0 0 900 170" preserveAspectRatio="none" role="img" aria-label="Simulated power trace"></svg></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--sq)"></span>S = square (short, lower power)</span>
+      <span><span class="sw" style="background:var(--mul)"></span>M = multiply (long, higher power)</span>
+    </div>
+
+    <div class="rowlabel">Operations the attacker sees</div>
+    <div class="bits" id="opsRow"></div>
+    <div class="rowlabel">Attacker's decoding (S then M → 1, S alone → 0) against the real key bits</div>
+    <div class="bits" id="decodedRow"></div>
+    <p id="powerMsg" class="callout"></p>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Square-and-multiply ops</div><div class="v" id="opsCount">–</div></div>
+      <div class="stat"><div class="k">Naive repeated multiplication (d − 1)</div><div class="v" id="naiveCount">–</div></div>
+      <div class="stat"><div class="k">7<sup>d</sup> mod 1,000,003 (both agree)</div><div class="v" id="modResult">–</div></div>
+    </div>
+  </section>
+
+  <!-- ============ PANEL 3: COMPLEXITY ============ -->
+  <section class="panel" id="complexity" role="tabpanel" hidden>
+    <h2>Why a side channel changes the complexity class</h2>
+    <p>Security often rests on a search space too big to explore: <code>k<sup>n</sup></code> passwords for alphabet size <code>k</code> and length <code>n</code>. A side channel that confirms one character at a time splits that search into <code>n</code> independent searches of size <code>k</code>, which makes it <strong>linear</strong> instead of <strong>exponential</strong>. Adding a character multiplies brute-force work by k but adds only k × samples guesses to the attack.</p>
+
+    <div class="controls">
+      <div>
+        <label for="kIn">Alphabet size k: <b id="kOut"></b></label>
+        <input type="range" id="kIn" min="2" max="95" value="62">
+      </div>
+      <div>
+        <label for="nIn">Secret length n: <b id="nOut"></b></label>
+        <input type="range" id="nIn" min="1" max="32" value="12">
+      </div>
+      <div>
+        <label for="sIn">Timing samples per guess: <b id="sOut"></b></label>
+        <input type="range" id="sIn" min="1" max="1000" value="100">
+      </div>
+      <div>
+        <label for="rateSel">Attacker speed</label>
+        <select id="rateSel">
+          <option value="100">100 guesses/s (online, rate-limited)</option>
+          <option value="1e6">1 million/s</option>
+          <option value="1e10" selected>10 billion/s (GPU cluster)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="chart"><svg id="cxChart" width="100%" height="260" viewBox="0 0 900 260" preserveAspectRatio="none" role="img" aria-label="Guesses needed versus secret length, log scale"></svg></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--bad)"></span>Brute force kⁿ (exponential)</span>
+      <span><span class="sw" style="background:var(--accent)"></span>Timing attack k·n·samples (linear)</span>
+      <span>Y axis is log₁₀(guesses)</span>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Brute force guesses</div><div class="v" id="bfG">–</div></div>
+      <div class="stat"><div class="k">Brute force time</div><div class="v" id="bfT">–</div></div>
+      <div class="stat"><div class="k">Side-channel guesses</div><div class="v" id="scG">–</div></div>
+      <div class="stat"><div class="k">Side-channel time</div><div class="v" id="scT">–</div></div>
+    </div>
+    <p class="callout" id="cxMsg"></p>
+  </section>
+
+  <footer>Teaching module for algorithmic complexity and side-channel attacks. All timings and traces are generated from a cost model. Nothing is measured on a real system.</footer>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+// Standard normal sample (Box–Muller)
+function gauss() {
+  let u = 0, v = 0;
+  while (!u) u = Math.random();
+  while (!v) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function fmtBig(x) {
+  if (!isFinite(x)) return "∞";
+  if (x < 1e6) return Math.round(x).toLocaleString();
+  const e = Math.floor(Math.log10(x));
+  return (x / 10 ** e).toFixed(2) + " × 10^" + e;
+}
+function fmtTime(sec) {
+  if (sec < 1) return "< 1 second";
+  const units = [["years", 31557600], ["days", 86400], ["hours", 3600], ["minutes", 60], ["seconds", 1]];
+  const AGE_UNIVERSE = 13.8e9 * 31557600;
+  if (sec > AGE_UNIVERSE) return fmtBig(sec / AGE_UNIVERSE) + " × age of universe";
+  for (const [name, s] of units) if (sec >= s) return fmtBig(sec / s) + " " + name;
+}
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("section.panel").forEach(p => p.hidden = p.id !== b.dataset.tab);
+  redrawAll();
+}));
+$("themeBtn").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  redrawAll();
+});
+
+/* =========================================================
+   PANEL 1 — Timing attack
+   Cost model: each request costs BASE units, plus PER_CHAR
+   for every character the server compares, plus noise.
+   ========================================================= */
+const ALPHA = "abcdefghijklmnopqrstuvwxyz";
+const BASE = 40, PER_CHAR = 10, FILLER = "#";
+const T = { secret: "", known: [], queries: 0, last: null, running: false };
+
+const CODE = {
+  naive:
+`function check(secret, guess) {
+  if (guess.length !== secret.length) return false;
+  for (let i = 0; i < secret.length; i++) {
+    if (guess[i] !== secret[i]) return false;   // ← exits early: time leaks i
+  }
+  return true;
+}`,
+  ct:
+`function check(secret, guess) {
+  let diff = guess.length ^ secret.length;
+  for (let i = 0; i < secret.length; i++) {
+    diff |= guess.charCodeAt(i) ^ secret.charCodeAt(i); // always runs n times
+  }
+  return diff === 0;                                     // time is independent of the guess
+}`
+};
+
+// Returns how many characters were compared and whether the guess matched.
+function serverCheck(secret, guess, mode) {
+  const n = secret.length;
+  if (mode === "naive") {
+    for (let i = 0; i < n; i++) if (guess[i] !== secret[i]) return { ok: false, steps: i + 1 };
+    return { ok: true, steps: n };
+  }
+  let diff = 0;
+  for (let i = 0; i < n; i++) diff |= guess.charCodeAt(i) ^ secret.charCodeAt(i);
+  return { ok: diff === 0, steps: n };
+}
+
+function timingReset() {
+  const clean = $("secretIn").value.toLowerCase().replace(/[^a-z]/g, "").slice(0, 10);
+  T.secret = clean || "a";
+  T.known = []; T.queries = 0; T.last = null;
+  timingRender();
+}
+
+function attackStep() {
+  const n = T.secret.length, pos = T.known.length;
+  if (pos >= n) return;
+  const mode = $("modeSel").value, noise = +$("noiseIn").value, samples = +$("samplesIn").value;
+  const prefix = T.known.join("");
+  const results = [...ALPHA].map(c => {
+    // Attacker knows the length (it can be found with the same trick on the length check).
+    const guess = prefix + c + FILLER.repeat(n - pos - 1);
+    let sum = 0, ok = false;
+    for (let s = 0; s < samples; s++) {
+      const r = serverCheck(T.secret, guess, mode);
+      sum += BASE + PER_CHAR * r.steps + noise * gauss();
+      ok = ok || r.ok;
+      T.queries++;
+    }
+    return { c, avg: sum / samples, ok };
+  });
+  // A successful login gives the answer away. Otherwise keep the slowest candidate.
+  const pick = results.find(r => r.ok) || results.reduce((a, b) => (b.avg > a.avg ? b : a));
+  T.known.push(pick.c);
+  T.last = { results, pick: pick.c, pos, loggedIn: pick.ok };
+  timingRender();
+}
+
+async function runFull() {
+  if (T.running) return;
+  T.running = true;
+  while (T.known.length < T.secret.length) {
+    attackStep();
+    await new Promise(r => setTimeout(r, 450));
+  }
+  T.running = false;
+  timingRender();
+}
+
+function timingRender() {
+  const mode = $("modeSel").value, n = T.secret.length, samples = +$("samplesIn").value;
+  $("noiseOut").textContent = $("noiseIn").value;
+  $("samplesOut").textContent = samples;
+  $("codeView").textContent = CODE[mode];
+
+  // Slots
+  const show = $("showSecret").checked;
+  $("slots").innerHTML = "";
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement("div");
+    d.className = "slot";
+    if (i < T.known.length) {
+      d.textContent = T.known[i];
+      d.classList.add(T.known[i] === T.secret[i] ? "ok" : "bad");
+    } else {
+      d.textContent = show ? T.secret[i] : "?";
+      d.style.opacity = show ? .35 : 1;
+      if (i === T.known.length) d.classList.add("next");
+    }
+    $("slots").appendChild(d);
+  }
+
+  // Stats
+  $("qCount").textContent = T.queries.toLocaleString();
+  $("qTiming").textContent = fmtBig(26 * n * samples);
+  $("qBrute").textContent = fmtBig(Math.pow(26, n));
+
+  const done = T.known.length >= n;
+  $("stepBtn").disabled = done || T.running;
+  $("runBtn").disabled = done || T.running;
+
+  drawTimingChart();
+
+  // Message
+  const msg = $("timingMsg");
+  if (!T.last) {
+    msg.innerHTML = "Press <b>Attack next character</b>. The attacker tries all 26 letters in the next position and keeps the one the server took longest to reject.";
+    return;
+  }
+  const L = T.last, right = L.pick === T.secret[L.pos];
+  let text = `Position ${L.pos + 1}: `;
+  if (L.loggedIn) text += `the guess with <b>${L.pick}</b> logged in, so the attacker knows it is correct.`;
+  else text += `<b>${L.pick}</b> took longest to reject, so the attacker keeps it. ` +
+    (right ? `<span style="color:var(--good)">Correct.</span>` : `<span style="color:var(--bad)">Wrong. The real letter was <b>${T.secret[L.pos]}</b>.</span>`);
+  if (mode === "ct") text += " With constant-time comparison every guess costs the same, so any pick is a coin flip among 26.";
+  else if (!right && !L.loggedIn) text += " The noise drowned out the 1-character timing difference. Try more samples.";
+  if (done) {
+    const allRight = T.known.join("") === T.secret;
+    text += allRight
+      ? ` <br><b>Secret recovered in ${T.queries.toLocaleString()} queries.</b> Brute force could need up to ${fmtBig(Math.pow(26, n))}.`
+      : ` <br><b>Attack failed.</b> Once one character is wrong, every later measurement is meaningless.`;
+  }
+  msg.innerHTML = text;
+}
+
+function drawTimingChart() {
+  const svg = $("timingChart");
+  svg.innerHTML = "";
+  const W = 900, H = 230, padL = 36, padB = 24, padT = 10;
+  const n = T.secret.length, noise = +$("noiseIn").value;
+  const yMax = BASE + PER_CHAR * n + 2 * noise + 10;
+  const y = v => padT + (H - padT - padB) * (1 - Math.max(0, v) / yMax);
+  // grid
+  for (let g = 0; g <= 4; g++) {
+    const v = yMax * g / 4;
+    el("line", { x1: padL, x2: W, y1: y(v), y2: y(v), stroke: css("--line"), "stroke-width": 1 }, svg);
+    el("text", { x: 2, y: y(v) + 4 }, svg).textContent = Math.round(v);
+  }
+  const bw = (W - padL) / 26;
+  [...ALPHA].forEach((c, i) => {
+    const x = padL + i * bw;
+    const r = T.last && T.last.results[i];
+    if (r) {
+      const isPick = c === T.last.pick;
+      el("rect", { x: x + 3, y: y(r.avg), width: bw - 6, height: Math.max(1, y(0) - y(r.avg)), rx: 3,
+        fill: isPick ? css("--accent") : css("--bar") }, svg);
+      if (c === T.secret[T.last.pos])
+        el("rect", { x: x + 1.5, y: padT, width: bw - 3, height: y(0) - padT, rx: 4, fill: "none",
+          stroke: css("--good"), "stroke-width": 2 }, svg);
+    }
+    const t = el("text", { x: x + bw / 2, y: H - 6, "text-anchor": "middle" }, svg);
+    t.textContent = c;
+  });
+  if (!T.last) {
+    const t = el("text", { x: W / 2, y: H / 2, "text-anchor": "middle" }, svg);
+    t.textContent = "no measurements yet";
+  }
+}
+
+["secretIn"].forEach(id => $(id).addEventListener("input", timingReset));
+["modeSel"].forEach(id => $(id).addEventListener("change", timingReset));
+["noiseIn", "samplesIn", "showSecret"].forEach(id => $(id).addEventListener("input", timingRender));
+$("stepBtn").addEventListener("click", attackStep);
+$("runBtn").addEventListener("click", runFull);
+$("resetBtn").addEventListener("click", timingReset);
+
+/* =========================================================
+   PANEL 2 — Square-and-multiply power trace
+   ========================================================= */
+const ALG = {
+  sm:
+`r = 1
+for bit in bits(d):          # most significant first
+    r = r * r mod N          # S  — always
+    if bit == 1:
+        r = r * c mod N      # M  — only for 1-bits  ← leaks d`,
+  sma:
+`r = 1
+for bit in bits(d):
+    r = r * r mod N          # S
+    t = r * c mod N          # M  — always executed
+    if bit == 1: r = t       # (real code uses a constant-time select)
+                             # 0-bits do a dummy multiply → trace is uniform`
+};
+let traceNoise = [];
+
+function modexpOps(d, alg) {
+  const bits = d.toString(2).split("").map(Number);
+  const ops = [];
+  bits.forEach((b, i) => {
+    ops.push({ t: "S", bit: i });
+    if (b === 1) ops.push({ t: "M", bit: i, dummy: false });
+    else if (alg === "sma") ops.push({ t: "M", bit: i, dummy: true });
+  });
+  return { bits, ops };
+}
+function modpow(base, exp, mod) {
+  let r = 1n, b = BigInt(base) % BigInt(mod), e = BigInt(exp), m = BigInt(mod);
+  while (e > 0n) { if (e & 1n) r = r * b % m; b = b * b % m; e >>= 1n; }
+  return r;
+}
+function readExp() {
+  let d = Math.floor(+$("expIn").value);
+  if (!isFinite(d) || d < 1) d = 1;
+  return Math.min(d, 1048575);
+}
+function newTraceNoise() { traceNoise = Array.from({ length: 4000 }, gauss); }
+
+function powerRender() {
+  const d = readExp(), alg = $("algSel").value, pn = +$("pnoiseIn").value / 100;
+  $("pnoiseOut").textContent = $("pnoiseIn").value + "%";
+  $("algView").textContent = ALG[alg];
+  const { bits, ops } = modexpOps(d, alg);
+  const showDummy = $("showDummy").checked;
+
+  // Trace
+  const svg = $("traceSvg");
+  svg.innerHTML = "";
+  const W = 900, H = 170, base = 140, lenS = 2, lenM = 3, gap = 1;
+  const units = ops.reduce((a, o) => a + (o.t === "S" ? lenS : lenM) + gap, 0);
+  const ux = (W - 10) / units;
+  let x = 5, pts = [], k = 0;
+  const push = (px, amp) => { pts.push(`${px.toFixed(1)},${(base - amp + pn * 25 * traceNoise[k++ % traceNoise.length]).toFixed(1)}`); };
+  ops.forEach(o => {
+    const len = (o.t === "S" ? lenS : lenM) * ux, amp = o.t === "S" ? 55 : 105;
+    const color = o.t === "S" ? css("--sq") : css("--mul");
+    el("rect", { x, y: 8, width: len, height: base - 8, fill: color, opacity: o.dummy && showDummy ? .28 : .1 }, svg);
+    const steps = Math.max(4, Math.round(len / 3));
+    for (let s = 0; s <= steps; s++) push(x + len * s / steps, amp * Math.sin(Math.PI * s / steps) ** 0.4);
+    x += len;
+    const g = gap * ux;
+    for (let s = 0; s <= 2; s++) push(x + g * s / 2, 0);
+    x += g;
+    if (ops.length <= 48) {
+      const t = el("text", { x: x - g - len / 2, y: H - 8, "text-anchor": "middle" }, svg);
+      t.textContent = o.t;
+    }
+  });
+  el("polyline", { points: pts.join(" "), fill: "none", stroke: css("--ink"), "stroke-width": 1.4 }, svg);
+
+  // Ops row
+  $("opsRow").innerHTML = ops.map(o =>
+    `<span style="color:${o.t === "S" ? "var(--sq)" : "var(--mul)"}">${o.t}</span>`).join("");
+
+  // Attacker decoding: S followed by M = 1, S followed by S / end = 0
+  const decoded = [];
+  for (let i = 0; i < ops.length; i++) {
+    if (ops[i].t !== "S") continue;
+    decoded.push(ops[i + 1] && ops[i + 1].t === "M" ? 1 : 0);
+  }
+  let correct = 0;
+  $("decodedRow").innerHTML = decoded.map((b, i) => {
+    const ok = b === bits[i]; if (ok) correct++;
+    return `<span class="${ok ? "ok" : "bad"}" title="real bit: ${bits[i]}">${b}</span>`;
+  }).join("");
+
+  const hw = bits.filter(b => b).length;
+  $("opsCount").textContent = `${ops.length} (${bits.length} S + ${ops.length - bits.length} M)`;
+  $("naiveCount").textContent = (d - 1).toLocaleString();
+  $("modResult").textContent = modpow(7, d, 1000003).toString();
+
+  $("powerMsg").innerHTML = alg === "sm"
+    ? `The attacker read <b>${correct}/${bits.length}</b> key bits straight off the trace. Total running time also depends on the key: ${hw} multiplies, one per 1-bit (the Hamming weight), so a <em>timing</em> measurement alone leaks how many 1s d has.`
+    : `Every bit now produces S followed by M, so the attacker decodes all 1s and gets <b>${correct}/${bits.length}</b> bits right, only the bits that happened to be 1. Running time is fixed at ${ops.length} operations for any ${bits.length}-bit key. The cost is about 1.5× more work on average.`;
+  if (pn >= 0.7) $("powerMsg").innerHTML += " At high noise one trace is hard to read. Real attacks average many traces, the same idea as the sample count in tab 1.";
+}
+$("expIn").addEventListener("input", powerRender);
+$("algSel").addEventListener("change", powerRender);
+$("pnoiseIn").addEventListener("input", powerRender);
+$("showDummy").addEventListener("input", powerRender);
+$("randKeyBtn").addEventListener("click", () => { $("expIn").value = 32768 + Math.floor(Math.random() * 32768); powerRender(); });
+$("retraceBtn").addEventListener("click", () => { newTraceNoise(); powerRender(); });
+
+/* =========================================================
+   PANEL 3 — Complexity comparison
+   ========================================================= */
+function cxRender() {
+  const k = +$("kIn").value, n = +$("nIn").value, s = +$("sIn").value, rate = +$("rateSel").value;
+  $("kOut").textContent = k; $("nOut").textContent = n; $("sOut").textContent = s;
+  const bf = Math.pow(k, n), sc = k * n * s;
+  $("bfG").textContent = fmtBig(bf);
+  $("scG").textContent = fmtBig(sc);
+  $("bfT").textContent = fmtTime(bf / rate);
+  $("scT").textContent = fmtTime(sc / rate);
+  $("cxMsg").innerHTML = bf > sc
+    ? `At length ${n} the side channel cuts the work by a factor of about <b>${fmtBig(bf / sc)}</b>. This is why "the math is secure" is not enough. The <em>implementation</em> must not leak partial progress.`
+    : `For very short secrets brute force is already cheap, so the side channel gains little. Increase <b>n</b> to see the curves diverge.`;
+
+  const svg = $("cxChart");
+  svg.innerHTML = "";
+  const W = 900, H = 260, padL = 40, padB = 26, padT = 10, NMAX = 32;
+  const yTop = Math.max(10, Math.ceil(Math.log10(Math.pow(k, NMAX)) / 10) * 10);
+  const xs = i => padL + (W - padL - 10) * (i - 1) / (NMAX - 1);
+  const ys = v => padT + (H - padT - padB) * (1 - v / yTop);
+  for (let g = 0; g <= 5; g++) {
+    const v = yTop * g / 5;
+    el("line", { x1: padL, x2: W - 10, y1: ys(v), y2: ys(v), stroke: css("--line") }, svg);
+    el("text", { x: 4, y: ys(v) + 4 }, svg).textContent = "10^" + Math.round(v);
+  }
+  for (let i = 1; i <= NMAX; i += (i === 1 ? 3 : 4)) el("text", { x: xs(i), y: H - 6, "text-anchor": "middle" }, svg).textContent = "n=" + i;
+  const line = (f, color) => {
+    const p = [];
+    for (let i = 1; i <= NMAX; i++) p.push(`${xs(i)},${ys(f(i))}`);
+    el("polyline", { points: p.join(" "), fill: "none", stroke: color, "stroke-width": 2.5 }, svg);
+  };
+  line(i => i * Math.log10(k), css("--bad"));
+  line(i => Math.log10(k * i * s), css("--accent"));
+  el("line", { x1: xs(n), x2: xs(n), y1: padT, y2: H - padB, stroke: css("--muted"), "stroke-dasharray": "4 4" }, svg);
+  el("circle", { cx: xs(n), cy: ys(n * Math.log10(k)), r: 5, fill: css("--bad") }, svg);
+  el("circle", { cx: xs(n), cy: ys(Math.log10(sc)), r: 5, fill: css("--accent") }, svg);
+}
+["kIn", "nIn", "sIn"].forEach(id => $(id).addEventListener("input", cxRender));
+$("rateSel").addEventListener("change", cxRender);
+
+function redrawAll() { timingRender(); powerRender(); cxRender(); }
+
+newTraceNoise();
+timingReset();
+powerRender();
+cxRender();
+</script>
+</body>
+</html>
