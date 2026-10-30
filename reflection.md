@@ -18,3 +18,6 @@ By using the sliders to change the Alphabet size, secret length, and timing samp
 For example, when the alphabet size is 26, secret length is 11, and timing samples per guess was 100, the brute-force time ended up taking 4 hours, while the side-channel took less than one second. As a result, I learned that brute-force attacks require testing an increasing number of passwords, while a side-channel attack can potentially figure out a password with significantly less work. 
 
 
+# Workflow
+
+For this assignment, I used an AI-assisted workflow with Claude Code. I started by providing topics we learned in the algorithmic complexity and side-channel attack modules and also providing the instructions. From there, I had the AI tool create a single index.html file, where I observed and tested it. After making some small changes, I reviewed the final code and tested it to ensure it was working as intended. 
